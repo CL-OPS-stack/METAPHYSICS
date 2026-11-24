@@ -1,0 +1,61 @@
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the website files
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Wrap the website in an Android app (Capacitor)
+        run: |
+          mkdir app && cd app
+          npm init -y > /dev/null
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+          mkdir www
+          cp ../index.html ../*.png www/
+          npx cap init METAPHYSICS com.clopsstack.metaphysics --web-dir www
+          npx cap add android
+          npx cap sync android
+
+      - name: Use the METAPHYSICS icon
+        run: |
+          cd app/android/app/src/main/res
+          rm -rf mipmap-anydpi-v26
+          for d in mipmap-*; do
+            cp ../../../../../www/icon-192.png "$d/ic_launcher.png"
+            cp ../../../../../www/icon-192.png "$d/ic_launcher_round.png"
+            rm -f "$d/ic_launcher_foreground.png"
+          done
+
+      - name: Build the APK
+        run: |
+          cd app/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../../METAPHYSICS.apk
+
+      - name: Publish it as a download (Releases)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-v${{ github.run_number }}
+          name: METAPHYSICS app (build ${{ github.run_number }})
+          body: Download METAPHYSICS.apk below and open it on your Android phone to install.
+          files: METAPHYSICS.apk
